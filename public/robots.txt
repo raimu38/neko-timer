@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://neko-timer.raimu38.com/sitemap.xml
