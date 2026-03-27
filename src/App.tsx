@@ -59,14 +59,10 @@ export default function App() {
     playSound(`touch${randomIndex}`);
   }, [unlockAudio, playSound]);
 
-  // 【重要】終了音トリガー：依存配列を最小限にして確実に発火させる
   useEffect(() => {
-    if (isFinished) {
-      playSound("finish");
-    }
-  }, [isFinished]); // playSoundはあえて依存に入れない（または安定させる）
+    if (isFinished) playSound("finish");
+  }, [isFinished, playSound]);
 
-  // まばたき
   useEffect(() => {
     if (isActive) return;
     let blinkTimeout: number;
@@ -79,7 +75,6 @@ export default function App() {
     return () => clearTimeout(blinkTimeout);
   }, [isActive]);
 
-  // タイマー
   useEffect(() => {
     let interval: number | undefined;
     if (isActive && timeLeft > 0) {
@@ -103,12 +98,10 @@ export default function App() {
   // --- 肉球ダイヤル操作ロジック ---
   const leftPawRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
-  const startAngle = useRef(0);
   const startTimeLeft = useRef(0);
   const lastAngle = useRef(0);
   const accumulatedDelta = useRef(0);
 
-  // 【修正点】Refの型をHTMLDivElement | nullを受け入れるように変更
   const getAngle = useCallback(
     (
       clientX: number,
@@ -117,9 +110,10 @@ export default function App() {
     ) => {
       if (!ref.current) return 0;
       const rect = ref.current.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      return Math.atan2(clientY - centerY, clientX - centerX);
+      return Math.atan2(
+        clientY - (rect.top + rect.height / 2),
+        clientX - (rect.left + rect.width / 2),
+      );
     },
     [],
   );
@@ -130,7 +124,6 @@ export default function App() {
       unlockAudio();
       isDragging.current = true;
       const angle = getAngle(clientX, clientY, leftPawRef);
-      startAngle.current = angle;
       lastAngle.current = angle;
       startTimeLeft.current = timeLeft;
       accumulatedDelta.current = 0;
@@ -148,19 +141,15 @@ export default function App() {
       if (delta < -Math.PI) delta += 2 * Math.PI;
       accumulatedDelta.current += delta;
       lastAngle.current = currentAngle;
-
       const secondsPerRadian = 1200 / (2 * Math.PI);
       const rawNextTime =
         startTimeLeft.current + accumulatedDelta.current * secondsPerRadian;
       const stepped = Math.round(rawNextTime / 30) * 30;
       setTimeLeft(Math.max(0, Math.min(1200, stepped)));
+      setInitialTime(Math.max(0, Math.min(1200, stepped)));
     },
     [isActive, getAngle],
   );
-
-  const handleDialEnd = useCallback(() => {
-    isDragging.current = false;
-  }, []);
 
   useEffect(() => {
     const onMove = (e: any) => {
@@ -168,17 +157,18 @@ export default function App() {
       const y = e.clientY ?? e.touches?.[0]?.clientY;
       if (x != null && y != null) handleDialMove(x, y);
     };
+    const onEnd = () => (isDragging.current = false);
     document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", handleDialEnd);
+    document.addEventListener("mouseup", onEnd);
     document.addEventListener("touchmove", onMove, { passive: false });
-    document.addEventListener("touchend", handleDialEnd);
+    document.addEventListener("touchend", onEnd);
     return () => {
       document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", handleDialEnd);
+      document.removeEventListener("mouseup", onEnd);
       document.removeEventListener("touchmove", onMove);
-      document.removeEventListener("touchend", handleDialEnd);
+      document.removeEventListener("touchend", onEnd);
     };
-  }, [handleDialMove, handleDialEnd]);
+  }, [handleDialMove]);
 
   const pawRotation = (timeLeft / 1200) * 360;
   const progress = initialTime > 0 ? timeLeft / initialTime : 0;
@@ -193,11 +183,24 @@ export default function App() {
         background: isFinished
           ? "linear-gradient(160deg, #E5E7EB 0%, #D1D5DB 100%)"
           : "linear-gradient(160deg, #FFF8E7 0%, #FFE8C8 50%, #FFD9B0 100%)",
-        fontFamily: "'Courier New', monospace",
+        fontFamily: "'Zen Maru Gothic', sans-serif",
       }}
     >
       <div className="flex flex-col items-center gap-8 w-full max-w-sm relative">
-        {/* 猫の顔セクション */}
+        <h1
+          style={{
+            fontSize: "36px",
+            fontWeight: "900",
+            color: isFinished ? "#4B5563" : "#6B4420",
+            letterSpacing: "4px",
+            marginBottom: "-10px",
+            fontFamily: "'M PLUS Rounded 1c', sans-serif",
+            textShadow: "2px 2px 0px rgba(255,255,255,0.8)",
+          }}
+        >
+          猫たいま〜
+        </h1>
+
         <div className="relative" style={{ width: 280, height: 280 }}>
           {/* 耳 */}
           {["left", "right"].map((side) => (
@@ -239,13 +242,17 @@ export default function App() {
             </div>
           ))}
 
-          {/* メーター */}
+          {/* メーター：zIndexを上げて手前に、pointer-events: noneで下のクリックを邪魔しない */}
           <svg
             className="absolute inset-0"
             width="280"
             height="280"
             viewBox="0 0 280 280"
-            style={{ transform: "rotate(-90deg)", zIndex: 5 }}
+            style={{
+              transform: "rotate(-90deg)",
+              zIndex: 20,
+              pointerEvents: "none",
+            }}
           >
             <circle
               cx="140"
@@ -303,7 +310,7 @@ export default function App() {
                         height: isEyeOpen ? 22 : 4,
                         background: "#5C4429",
                         borderRadius: isEyeOpen ? "50%" : "2px",
-                        transition: "height 0.1s, border-radius 0.1s",
+                        transition: "height 0.1s",
                       }}
                     />
                   ))}
@@ -378,7 +385,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* 肉球セクション（完璧と言っていただいた配置を完全維持） */}
         <div className="flex justify-between w-full px-2 gap-6">
           <div className="flex flex-col items-center gap-1">
             <div
@@ -389,14 +395,10 @@ export default function App() {
                 height: 160,
                 cursor: isActive ? "not-allowed" : "grab",
               }}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                handleDialStart(e.clientX, e.clientY);
-              }}
-              onTouchStart={(e) => {
-                e.preventDefault();
-                handleDialStart(e.touches[0].clientX, e.touches[0].clientY);
-              }}
+              onMouseDown={(e) => handleDialStart(e.clientX, e.clientY)}
+              onTouchStart={(e) =>
+                handleDialStart(e.touches[0].clientX, e.touches[0].clientY)
+              }
             >
               <div
                 style={{
